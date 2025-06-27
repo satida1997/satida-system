@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>บัญชีน่ารัก</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Kanit', sans-serif;
+      background-color: #fff7f9;
+    }
+    .rounded-font {
+      font-family: 'Fredoka', sans-serif;
+    }
+    .cute-icon {
+      width: 24px;
+      height: 24px;
+    }
+  </style>
+</head>
+<body class="p-4 text-pink-800">
+  <!-- Header -->
+  <header class="text-center mb-6">
+    <h1 class="text-3xl rounded-font text-pink-500">🐷 บัญชีรายรับรายจ่ายน่ารัก 💰</h1>
+  </header>
+
+  <!-- Dashboard Section -->
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-pink-100 p-4 rounded-2xl shadow">
+      <h2 class="text-lg">💵 รายรับ</h2>
+      <p id="income-total" class="text-2xl font-bold">0 ฿</p>
+    </div>
+    <div class="bg-yellow-100 p-4 rounded-2xl shadow">
+      <h2 class="text-lg">💸 รายจ่าย</h2>
+      <p id="expense-total" class="text-2xl font-bold">0 ฿</p>
+    </div>
+    <div class="bg-green-100 p-4 rounded-2xl shadow">
+      <h2 class="text-lg">💚 คงเหลือ</h2>
+      <p id="balance" class="text-2xl font-bold">0 ฿</p>
+    </div>
+  </section>
+
+  <!-- Form Section -->
+  <section class="bg-white p-4 rounded-2xl shadow mb-6">
+    <h2 class="text-xl mb-2">เพิ่มข้อมูลรายรับ/รายจ่าย 📝</h2>
+    <form id="entry-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <input type="text" name="description" placeholder="คำอธิบาย" class="p-2 border rounded" required>
+      <input type="number" name="amount" placeholder="จำนวนเงิน (฿)" class="p-2 border rounded" required>
+      <select name="type" class="p-2 border rounded">
+        <option value="income">รายรับ</option>
+        <option value="expense">รายจ่าย</option>
+      </select>
+      <select name="category" class="p-2 border rounded">
+        <option value="อาหาร">🍜 อาหาร</option>
+        <option value="เดินทาง">🚌 เดินทาง</option>
+        <option value="เงินเดือน">💼 เงินเดือน</option>
+        <option value="บันเทิง">🎮 บันเทิง</option>
+      </select>
+      <input type="date" name="date" class="p-2 border rounded" required>
+      <button type="submit" class="bg-pink-400 hover:bg-pink-500 text-white rounded p-2 transition">บันทึก 💾</button>
+    </form>
+  </section>
+
+  <!-- Calendar Section -->
+  <section class="bg-blue-50 p-4 rounded-2xl shadow mb-6">
+    <h2 class="text-xl mb-2">📅 ปฏิทินรายการ</h2>
+    <div id="entry-list" class="space-y-2"></div>
+  </section>
+
+  <!-- Pie Chart -->
+  <section class="bg-yellow-50 p-4 rounded-2xl shadow mb-6">
+    <h2 class="text-xl mb-2">📊 สรุปหมวดหมู่รายจ่าย</h2>
+    <canvas id="summaryChart"></canvas>
+  </section>
+
+  <script>
+    const form = document.getElementById("entry-form");
+    const incomeTotal = document.getElementById("income-total");
+    const expenseTotal = document.getElementById("expense-total");
+    const balance = document.getElementById("balance");
+    const entryList = document.getElementById("entry-list");
+    const chartCtx = document.getElementById("summaryChart").getContext("2d");
+    let chart;
+
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqkj91y-tiTLOwm9EVF757Hh7f7MX2kPoXBy6OQT8do45XRpFp14DUbpwpLUZ6lVpDkg/exec";
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(form));
+
+      await fetch(SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      form.reset();
+      loadData();
+    });
+
+    async function loadData() {
+      const res = await fetch(SCRIPT_URL);
+      const rows = await res.json();
+
+      let income = 0, expense = 0;
+      const categories = {};
+
+      entryList.innerHTML = "";
+      rows.forEach(row => {
+        const { date, description, amount, type, category } = row;
+        const num = Number(amount);
+        if (type === "income") income += num;
+        else {
+          expense += num;
+          categories[category] = (categories[category] || 0) + num;
+        }
+        entryList.innerHTML += `
+          <div class="bg-white p-2 rounded shadow flex justify-between items-center">
+            <div>
+              <span>${date} </span>
+              <span>${type === "income" ? "🟢" : "🔴"} ${description}</span>
+            </div>
+            <div>${num.toLocaleString()} ฿</div>
+          </div>`;
+      });
+
+      incomeTotal.textContent = `${income.toLocaleString()} ฿`;
+      expenseTotal.textContent = `${expense.toLocaleString()} ฿`;
+      balance.textContent = `${(income - expense).toLocaleString()} ฿`;
+
+      if (chart) chart.destroy();
+      chart = new Chart(chartCtx, {
+        type: 'pie',
+        data: {
+          labels: Object.keys(categories),
+          datasets: [{
+            label: 'หมวดหมู่รายจ่าย',
+            data: Object.values(categories),
+            backgroundColor: ["#F9A8D4", "#FCD34D", "#6EE7B7", "#93C5FD"]
+          }]
+        }
+      });
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
